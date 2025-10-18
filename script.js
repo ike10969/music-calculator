@@ -93,13 +93,7 @@ class MusicCalculator {
                 const note = button.dataset.note;
                 this.stopSingleSound(note);
             });
-            button.addEventListener('mouseleave', (e) => {
-                // 只在鼠标离开按钮且按钮处于按下状态时停止声音
-                if (e.buttons === 1) { // 检查左键是否按下
-                    const note = button.dataset.note;
-                    this.stopSingleSound(note);
-                }
-            });
+            // 移除mouseleave事件，因为它会干扰滑动功能
         });
 
         // 全局停止事件（用于清除所有声音）
@@ -211,29 +205,24 @@ class MusicCalculator {
         const sound = this.activeOscillators.get(noteId);
         if (sound) {
             try {
+                console.log('停止单个声音:', noteId);
                 // 清除该音符的长按计时器
                 if (this.longPressTimers.has(noteId)) {
                     clearTimeout(this.longPressTimers.get(noteId));
                     this.longPressTimers.delete(noteId);
                 }
 
-                // 淡出效果
-                const now = this.audioContext.currentTime;
-                sound.gainNode.gain.cancelScheduledValues(now);
-                sound.gainNode.gain.linearRampToValueAtTime(0, now + 0.05);
-                
-                setTimeout(() => {
-                    try {
-                        sound.oscillator.stop();
-                        sound.oscillator.disconnect();
-                        sound.gainNode.disconnect();
-                        this.activeOscillators.delete(noteId);
-                        this.removePlayingEffect(sound.button);
-                        this.updateChordDisplay();
-                    } catch (error) {
-                        console.error('清理振荡器失败:', error);
-                    }
-                }, 50);
+                // 立即停止声音，不使用淡出效果
+                try {
+                    sound.oscillator.stop();
+                    sound.oscillator.disconnect();
+                    sound.gainNode.disconnect();
+                    this.activeOscillators.delete(noteId);
+                    this.removePlayingEffect(sound.button);
+                    this.updateChordDisplay();
+                } catch (error) {
+                    console.error('清理振荡器失败:', error);
+                }
                 
             } catch (error) {
                 console.error('停止单个声音失败:', error);
@@ -352,48 +341,64 @@ class MusicCalculator {
         displayArea.innerHTML = `<div style="color: #ff4444; text-align: center;">${message}</div>`;
     }
 
-    // 添加滑动事件处理 - 修复版本
+    // 添加滑动事件处理 - 最终版本
     addSwipeEvents() {
-        // 为每个按钮添加鼠标进入事件
+        console.log('初始化滑动事件');
+        
+        // 为每个按钮添加鼠标按下和移动事件
         document.querySelectorAll('.note-btn').forEach(button => {
+            // 鼠标按下事件
+            button.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('鼠标按下:', button.dataset.note);
+                this.isDragging = true;
+                this.lastPlayedNote = button.dataset.note;
+                const baseFrequency = parseFloat(button.dataset.frequency);
+                this.playSound(baseFrequency, button.dataset.note, button);
+            });
+
+            // 鼠标进入事件（用于滑动切换）
             button.addEventListener('mouseenter', (e) => {
-                // 检查是否正在拖动（鼠标按下状态）
                 if (this.isDragging) {
+                    console.log('鼠标进入新按钮:', button.dataset.note);
                     const note = button.dataset.note;
                     const baseFrequency = parseFloat(button.dataset.frequency);
                     
-                    // 避免重复播放同一个音符
                     if (note !== this.lastPlayedNote) {
                         this.lastPlayedNote = note;
-                        // 停止当前所有声音，然后播放新音符
                         this.stopSound();
                         this.playSound(baseFrequency, note, button);
                     }
                 }
             });
-        });
 
-        // 全局鼠标按下事件
-        document.addEventListener('mousedown', (e) => {
-            if (e.target.closest('.note-btn')) {
-                this.isDragging = true;
-                const startButton = e.target.closest('.note-btn');
-                const note = startButton.dataset.note;
-                const baseFrequency = parseFloat(startButton.dataset.frequency);
-                
-                this.lastPlayedNote = note;
-                // 播放初始按钮的声音
-                this.playSound(baseFrequency, note, startButton);
-            }
+            // 鼠标离开事件（停止离开按钮的声音）
+            button.addEventListener('mouseleave', (e) => {
+                if (this.isDragging) {
+                    console.log('鼠标离开按钮:', button.dataset.note);
+                    // 停止当前按钮的声音
+                    const note = button.dataset.note;
+                    this.stopSingleSound(note);
+                }
+            });
         });
 
         // 全局鼠标释放事件
         document.addEventListener('mouseup', (e) => {
             if (this.isDragging) {
+                console.log('全局鼠标释放');
                 this.stopSound();
             }
             this.isDragging = false;
             this.lastPlayedNote = null;
+        });
+
+        // 防止鼠标释放事件冒泡到按钮
+        document.querySelectorAll('.note-btn').forEach(button => {
+            button.addEventListener('mouseup', (e) => {
+                e.stopPropagation();
+            });
         });
 
         // 触摸事件
@@ -401,6 +406,7 @@ class MusicCalculator {
         
         document.addEventListener('touchstart', (e) => {
             if (e.target.closest('.note-btn')) {
+                console.log('触摸开始');
                 touchStartButton = e.target.closest('.note-btn');
                 this.isDragging = true;
                 const note = touchStartButton.dataset.note;
@@ -423,6 +429,7 @@ class MusicCalculator {
                 const baseFrequency = parseFloat(noteButton.dataset.frequency);
                 
                 if (note !== this.lastPlayedNote) {
+                    console.log('触摸滑动切换到新音符:', note);
                     this.lastPlayedNote = note;
                     this.stopSound();
                     this.playSound(baseFrequency, note, noteButton);
@@ -432,6 +439,7 @@ class MusicCalculator {
 
         document.addEventListener('touchend', (e) => {
             if (this.isDragging) {
+                console.log('触摸结束，停止声音');
                 this.stopSound();
             }
             this.isDragging = false;
