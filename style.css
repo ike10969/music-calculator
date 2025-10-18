@@ -1,0 +1,262 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, #1A1B2E 0%, #2D2F45 100%);
+    color: #FFFFFF;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    overflow: hidden;
+}
+
+.calculator-container {
+    width: 100%;
+    max-width: 400px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    padding: 24px;
+}
+
+/* 状态栏 */
+.status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pitch-display, .volume-indicator {
+    font-size: 14px;
+    color: #00A3FF;
+    font-weight: 600;
+}
+
+/* 显示区域 */
+.display-area {
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 24px;
+    border: 1px solid rgba(0, 163, 255, 0.3);
+    box-shadow: 0 0 20px rgba(0, 163, 255, 0.2);
+}
+
+.current-note {
+    font-size: 32px;
+    font-weight: bold;
+    color: #00A3FF;
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.frequency-display {
+    font-size: 14px;
+    color: #CCCCCC;
+    text-align: center;
+}
+
+/* 按钮网格 */
+.button-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.calc-btn {
+    aspect-ratio: 1;
+    border: none;
+    border-radius: 16px;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.calc-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.1);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.calc-btn:active::before {
+    opacity: 1;
+}
+
+.calc-btn:active {
+    transform: scale(0.95);
+}
+
+/* 音符按钮 */
+.note-btn {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #FFFFFF;
+}
+
+.note-btn span {
+    font-size: 12px;
+    color: #00A3FF;
+    margin-top: 4px;
+}
+
+.note-btn:active {
+    background: rgba(0, 163, 255, 0.3);
+    box-shadow: 0 0 20px rgba(0, 163, 255, 0.4);
+}
+
+/* 功能按钮 */
+.function-btn {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.sharp-btn {
+    color: #4CAF50;
+}
+
+.sharp-btn span {
+    color: #4CAF50;
+}
+
+.sharp-btn:active {
+    background: rgba(76, 175, 80, 0.3);
+    box-shadow: 0 0 20px rgba(76, 175, 80, 0.4);
+}
+
+.flat-btn {
+    color: #F44336;
+}
+
+.flat-btn span {
+    color: #F44336;
+}
+
+.flat-btn:active {
+    background: rgba(244, 67, 54, 0.3);
+    box-shadow: 0 0 20px rgba(244, 67, 54, 0.4);
+}
+
+.clear-btn {
+    color: #FF9800;
+}
+
+.clear-btn span {
+    color: #FF9800;
+}
+
+.clear-btn:active {
+    background: rgba(255, 152, 0, 0.3);
+    box-shadow: 0 0 20px rgba(255, 152, 0, 0.4);
+}
+
+/* 控制栏 */
+.control-bar {
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.volume-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.volume-control label {
+    font-size: 14px;
+    color: #00A3FF;
+    min-width: 50px;
+}
+
+#volume-slider {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.2);
+    outline: none;
+    -webkit-appearance: none;
+}
+
+#volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #00A3FF;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(0, 163, 255, 0.6);
+}
+
+#volume-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #00A3FF;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 0 10px rgba(0, 163, 255, 0.6);
+}
+
+/* 响应式设计 */
+@media (max-width: 480px) {
+    .calculator-container {
+        padding: 16px;
+        margin: 10px;
+    }
+    
+    .calc-btn {
+        font-size: 20px;
+    }
+    
+    .note-btn span {
+        font-size: 10px;
+    }
+    
+    .current-note {
+        font-size: 28px;
+    }
+}
+
+/* 长按效果 */
+.calc-btn.playing {
+    animation: pulse 0.5s infinite alternate;
+}
+
+@keyframes pulse {
+    from {
+        box-shadow: 0 0 10px rgba(0, 163, 255, 0.4);
+    }
+    to {
+        box-shadow: 0 0 20px rgba(0, 163, 255, 0.8);
+    }
+}
