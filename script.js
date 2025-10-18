@@ -97,8 +97,14 @@ class MusicCalculator {
     }
 
     playSound(frequency, note) {
-        if (this.isPlaying) {
-            this.stopSound();
+        // 移除停止当前声音的逻辑，允许长按平滑过渡
+        // 如果正在播放，直接使用当前振荡器
+        if (this.isPlaying && this.oscillator) {
+            // 只更新频率，不重新创建振荡器
+            const actualFrequency = this.calculateFrequency(frequency);
+            this.oscillator.frequency.setValueAtTime(actualFrequency, this.audioContext.currentTime);
+            this.updateNoteDisplay(note, actualFrequency);
+            return;
         }
 
         if (!this.audioContext) {
@@ -151,18 +157,15 @@ class MusicCalculator {
 
         if (this.isPlaying && this.oscillator && this.gainNode) {
             try {
-                // 淡出效果
-                this.gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.1);
+                // 立即停止声音，移除淡出效果
+                this.gainNode.gain.cancelScheduledValues(this.audioContext.currentTime);
+                this.gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
                 
-                setTimeout(() => {
-                    if (this.oscillator) {
-                        this.oscillator.stop();
-                        this.oscillator.disconnect();
-                        this.oscillator = null;
-                    }
-                    this.isPlaying = false;
-                    this.removePlayingEffect();
-                }, 100);
+                this.oscillator.stop();
+                this.oscillator.disconnect();
+                this.oscillator = null;
+                this.isPlaying = false;
+                this.removePlayingEffect();
                 
             } catch (error) {
                 console.error('停止声音失败:', error);
@@ -173,8 +176,9 @@ class MusicCalculator {
     startLongPress(button, frequency, note) {
         this.longPressTimer = setTimeout(() => {
             if (this.isPlaying) {
-                // 长按时重新播放，确保持续发声
-                this.playSound(frequency, note);
+                // 长按时不重新播放，而是保持当前声音持续
+                // 只需要更新显示效果，避免声音中断
+                this.addPlayingEffect(button);
             }
         }, 500);
     }
