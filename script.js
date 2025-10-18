@@ -1,12 +1,11 @@
 class MusicCalculator {
     constructor() {
         this.audioContext = null;
-        this.oscillator = null;
-        this.gainNode = null;
-        this.isPlaying = false;
+        this.masterGainNode = null;
+        this.activeOscillators = new Map(); // 存储当前活动的振荡器
         this.currentPitch = 0; // 音调偏移（半音数）
         this.volume = 0.8;
-        this.longPressTimer = null;
+        this.longPressTimers = new Map(); // 存储每个按钮的长按计时器
         
         this.noteFrequencies = {
             'C4': 261.63, 'D4': 293.66, 'E4': 329.63,
@@ -31,9 +30,9 @@ class MusicCalculator {
             }
             
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            this.gainNode = this.audioContext.createGain();
-            this.gainNode.connect(this.audioContext.destination);
-            this.gainNode.gain.value = this.volume;
+            this.masterGainNode = this.audioContext.createGain();
+            this.masterGainNode.connect(this.audioContext.destination);
+            this.masterGainNode.gain.value = this.volume;
             
             // 处理iOS Safari的自动播放限制
             if (this.audioContext.state === 'suspended') {
@@ -70,10 +69,26 @@ class MusicCalculator {
         // 音量控制
         document.getElementById('volume-slider').addEventListener('input', (e) => {
             this.volume = e.target.value / 100;
-            if (this.gainNode) {
-                this.gainNode.gain.value = this.volume;
+            if (this.masterGainNode) {
+                this.masterGainNode.gain.value = this.volume;
             }
             this.updateVolumeDisplay();
+        });
+
+        // 为每个按钮添加单独的释放事件
+        document.querySelectorAll('.note-btn').forEach(button => {
+            button.addEventListener('mouseup', (e) => {
+                const note = button.dataset.note;
+                this.stopSingleSound(note);
+            });
+            button.addEventListener('touchend', (e) => {
+                const note = button.dataset.note;
+                this.stopSingleSound(note);
+            });
+            button.addEventListener('mouseleave', (e) => {
+                const note = button.dataset.note;
+                this.stopSingleSound(note);
+            });
         });
 
         // 防止移动端默认行为
@@ -92,19 +107,16 @@ class MusicCalculator {
         const note = button.dataset.note;
         const baseFrequency = parseFloat(button.dataset.frequency);
         
-        this.playSound(baseFrequency, note);
+        this.playSound(baseFrequency, note, button);
         this.startLongPress(button, baseFrequency, note);
     }
 
-    playSound(frequency, note) {
-        // 移除停止当前声音的逻辑，允许长按平滑过渡
-        // 如果正在播放，直接使用当前振荡器
-        if (this.isPlaying && this.oscillator) {
-            // 只更新频率，不重新创建振荡器
-            const actualFrequency = this.calculateFrequency(frequency);
-            this.oscillator.frequency.setValueAtTime(actualFrequency, this.audioContext.currentTime);
-            this.updateNoteDisplay(note, actualFrequency);
-            return;
+    playSound(frequency, note, button) {
+        const noteId = note; // 使用音符名称作为唯一标识
+
+        // 如果该音符已经在播放，先停止它
+        if (this.activeOscillators.has(noteId)) {
+            this.stopSingleSound(noteId);
         }
 
         if (!this.audioContext) {
@@ -124,24 +136,34 @@ class MusicCalculator {
             // 应用音调偏移
             const actualFrequency = this.calculateFrequency(frequency);
             
-            this.oscillator = this.audioContext.createOscillator();
-            this.oscillator.type = 'sine'; // 正弦波，音色更纯净
-            this.oscillator.frequency.value = actualFrequency;
+            // 创建新的振荡器和增益节点
+            const oscillator = this.audioContext.createOscillator();
+            const gainNode = this.audioContext.createGain();
             
-            this.gainNode = this.audioContext.createGain();
-            this.oscillator.connect(this.gainNode);
-            this.gainNode.connect(this.audioContext.destination);
+            oscillator.type = 'sine'; // 正弦波，音色更纯净
+            oscillator.frequency.value = actualFrequency;
+            
+            // 连接到主增益节点
+            oscillator.connect(gainNode);
+            gainNode.connect(this.masterGainNode);
             
             // 淡入效果
             const now = this.audioContext.currentTime;
-            this.gainNode.gain.setValueAtTime(0, now);
-            this.gainNode.gain.linearRampToValueAtTime(this.volume, now + 0.02);
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(this.volume, now + 0.02);
             
-            this.oscillator.start();
-            this.isPlaying = true;
+            oscillator.start();
             
-            this.updateNoteDisplay(note, actualFrequency);
-            this.addPlayingEffect(event.target.closest('.note-btn'));
+            // 存储振荡器和增益节点
+            this.activeOscillators.set(noteId, {
+                oscillator: oscillator,
+                gainNode: gainNode,
+                frequency: actualFrequency,
+                button: button
+            });
+            
+            this.updateChordDisplay();
+            this.addPlayingEffect(button);
             
         } catch (error) {
             console.error('播放声音失败:', error);
@@ -150,37 +172,58 @@ class MusicCalculator {
     }
 
     stopSound() {
-        if (this.longPressTimer) {
-            clearTimeout(this.longPressTimer);
-            this.longPressTimer = null;
-        }
+        // 停止所有长按计时器
+        this.longPressTimers.forEach((timer, noteId) => {
+            clearTimeout(timer);
+        });
+        this.longPressTimers.clear();
 
-        if (this.isPlaying && this.oscillator && this.gainNode) {
+        // 停止所有振荡器
+        this.activeOscillators.forEach((sound, noteId) => {
+            this.stopSingleSound(noteId);
+        });
+    }
+
+    stopSingleSound(noteId) {
+        const sound = this.activeOscillators.get(noteId);
+        if (sound) {
             try {
-                // 立即停止声音，移除淡出效果
-                this.gainNode.gain.cancelScheduledValues(this.audioContext.currentTime);
-                this.gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+                // 淡出效果
+                const now = this.audioContext.currentTime;
+                sound.gainNode.gain.cancelScheduledValues(now);
+                sound.gainNode.gain.linearRampToValueAtTime(0, now + 0.05);
                 
-                this.oscillator.stop();
-                this.oscillator.disconnect();
-                this.oscillator = null;
-                this.isPlaying = false;
-                this.removePlayingEffect();
+                setTimeout(() => {
+                    sound.oscillator.stop();
+                    sound.oscillator.disconnect();
+                    sound.gainNode.disconnect();
+                    this.activeOscillators.delete(noteId);
+                    this.removePlayingEffect(sound.button);
+                    this.updateChordDisplay();
+                }, 50);
                 
             } catch (error) {
-                console.error('停止声音失败:', error);
+                console.error('停止单个声音失败:', error);
             }
         }
     }
 
     startLongPress(button, frequency, note) {
-        this.longPressTimer = setTimeout(() => {
-            if (this.isPlaying) {
-                // 长按时不重新播放，而是保持当前声音持续
-                // 只需要更新显示效果，避免声音中断
+        const noteId = note;
+        
+        // 清除现有的计时器
+        if (this.longPressTimers.has(noteId)) {
+            clearTimeout(this.longPressTimers.get(noteId));
+        }
+
+        const timer = setTimeout(() => {
+            // 长按时保持声音持续播放
+            if (this.activeOscillators.has(noteId)) {
                 this.addPlayingEffect(button);
             }
         }, 500);
+        
+        this.longPressTimers.set(noteId, timer);
     }
 
     calculateFrequency(baseFrequency) {
@@ -221,13 +264,25 @@ class MusicCalculator {
         volumeIndicator.textContent = `音量: ${volumePercent}%`;
     }
 
-    updateNoteDisplay(note, frequency) {
+    updateChordDisplay() {
         const currentNote = document.querySelector('.current-note');
         const frequencyDisplay = document.querySelector('.frequency-display');
         
-        const pitchName = this.getPitchName();
-        currentNote.textContent = `${note} (${pitchName})`;
-        frequencyDisplay.textContent = `频率: ${frequency.toFixed(2)}Hz`;
+        if (this.activeOscillators.size === 0) {
+            currentNote.textContent = '准备播放';
+            frequencyDisplay.textContent = '频率: 0Hz';
+        } else if (this.activeOscillators.size === 1) {
+            // 单个音符
+            const sound = Array.from(this.activeOscillators.values())[0];
+            const pitchName = this.getPitchName();
+            currentNote.textContent = `${Object.keys(this.noteFrequencies).find(key => this.noteFrequencies[key] === sound.frequency / Math.pow(2, this.currentPitch / 12))} (${pitchName})`;
+            frequencyDisplay.textContent = `频率: ${sound.frequency.toFixed(2)}Hz`;
+        } else {
+            // 和弦显示
+            const activeNotes = Array.from(this.activeOscillators.keys()).sort();
+            currentNote.textContent = `和弦: ${activeNotes.join('+')}`;
+            frequencyDisplay.textContent = `同时播放: ${this.activeOscillators.size}个音符`;
+        }
     }
 
     getPitchName() {
@@ -249,7 +304,11 @@ class MusicCalculator {
         button.classList.add('playing');
     }
 
-    removePlayingEffect() {
+    removePlayingEffect(button) {
+        button.classList.remove('playing');
+    }
+
+    removeAllPlayingEffects() {
         document.querySelectorAll('.note-btn').forEach(btn => {
             btn.classList.remove('playing');
         });
