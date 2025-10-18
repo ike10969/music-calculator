@@ -401,24 +401,27 @@ class MusicCalculator {
             });
         });
 
-        // 触摸事件
+        // 触摸事件 - 修复版本
         let touchStartButton = null;
         
-        document.addEventListener('touchstart', (e) => {
-            if (e.target.closest('.note-btn')) {
-                console.log('触摸开始');
-                touchStartButton = e.target.closest('.note-btn');
+        // 为每个按钮添加触摸开始事件
+        document.querySelectorAll('.note-btn').forEach(button => {
+            button.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('触摸开始:', button.dataset.note);
+                touchStartButton = button;
                 this.isDragging = true;
-                const note = touchStartButton.dataset.note;
-                const baseFrequency = parseFloat(touchStartButton.dataset.frequency);
-                
-                this.lastPlayedNote = note;
-                this.playSound(baseFrequency, note, touchStartButton);
-            }
-        }, { passive: false });
+                this.lastPlayedNote = button.dataset.note;
+                const baseFrequency = parseFloat(button.dataset.frequency);
+                this.playSound(baseFrequency, button.dataset.note, button);
+            }, { passive: false });
+        });
 
+        // 全局触摸移动事件
         document.addEventListener('touchmove', (e) => {
             if (!this.isDragging) return;
+            e.preventDefault();
             
             const touch = e.touches[0];
             const hoveredElement = document.elementFromPoint(touch.clientX, touch.clientY);
@@ -433,6 +436,7 @@ class MusicCalculator {
                     this.lastPlayedNote = note;
                     this.stopSound();
                     this.playSound(baseFrequency, note, noteButton);
+                    touchStartButton = noteButton;
                 }
             }
         }, { passive: false });
