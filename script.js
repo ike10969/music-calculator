@@ -6,6 +6,9 @@ class MusicCalculator {
         this.currentPitch = 0; // 音调偏移（半音数）
         this.volume = 0.8;
         this.longPressTimers = new Map(); // 存储每个按钮的长按计时器
+        this.lastPlayedNote = null; // 记录最后播放的音符
+        this.isDragging = false; // 是否正在拖动
+        this.currentDragButton = null; // 当前拖动的按钮
         
         this.noteFrequencies = {
             'C4': 261.63, 'D4': 293.66, 'E4': 329.63,
@@ -120,6 +123,9 @@ class MusicCalculator {
         event.stopPropagation(); // 阻止事件冒泡
         const button = event.target.closest('.note-btn');
         if (!button) return;
+
+        // 如果正在拖动，不处理点击事件
+        if (this.isDragging) return;
 
         const note = button.dataset.note;
         const baseFrequency = parseFloat(button.dataset.frequency);
@@ -348,61 +354,72 @@ class MusicCalculator {
 
     // 添加滑动事件处理
     addSwipeEvents() {
-        let isDragging = false;
-        let currentButton = null;
-        let lastPlayedNote = null;
+        // 使用实例变量而不是局部变量
+        this.isDragging = false;
+        this.currentDragButton = null;
 
         // 鼠标事件
         document.addEventListener('mousedown', (e) => {
             if (e.target.closest('.note-btn')) {
-                isDragging = true;
-                currentButton = e.target.closest('.note-btn');
+                this.isDragging = true;
+                this.currentDragButton = e.target.closest('.note-btn');
+                // 记录初始按钮，避免立即切换
+                this.lastPlayedNote = this.currentDragButton.dataset.note;
+                // 播放初始按钮的声音
+                const note = this.currentDragButton.dataset.note;
+                const baseFrequency = parseFloat(this.currentDragButton.dataset.frequency);
+                this.playSound(baseFrequency, note, this.currentDragButton);
             }
         });
 
         document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
+            if (!this.isDragging) return;
             
-            const hoveredButton = document.elementFromPoint(e.clientX, e.clientY);
-            const noteButton = hoveredButton?.closest('.note-btn');
+            const hoveredElement = document.elementFromPoint(e.clientX, e.clientY);
+            const noteButton = hoveredElement?.closest('.note-btn');
             
-            if (noteButton && noteButton !== currentButton) {
-                currentButton = noteButton;
+            if (noteButton && noteButton !== this.currentDragButton) {
+                this.currentDragButton = noteButton;
                 this.handleSwipeToButton(noteButton);
             }
         });
 
         document.addEventListener('mouseup', () => {
-            isDragging = false;
-            currentButton = null;
-            lastPlayedNote = null;
+            if (this.isDragging) {
+                this.stopSound();
+            }
+            this.isDragging = false;
+            this.currentDragButton = null;
+            this.lastPlayedNote = null;
         });
 
         // 触摸事件
         document.addEventListener('touchstart', (e) => {
             if (e.target.closest('.note-btn')) {
-                isDragging = true;
-                currentButton = e.target.closest('.note-btn');
+                this.isDragging = true;
+                this.currentDragButton = e.target.closest('.note-btn');
+                // 记录初始按钮，避免立即切换
+                this.lastPlayedNote = this.currentDragButton.dataset.note;
             }
         }, { passive: false });
 
         document.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
+            if (!this.isDragging) return;
             
             const touch = e.touches[0];
             const hoveredElement = document.elementFromPoint(touch.clientX, touch.clientY);
             const noteButton = hoveredElement?.closest('.note-btn');
             
-            if (noteButton && noteButton !== currentButton) {
-                currentButton = noteButton;
+            if (noteButton && noteButton !== this.currentDragButton) {
+                this.currentDragButton = noteButton;
                 this.handleSwipeToButton(noteButton);
             }
         }, { passive: false });
 
         document.addEventListener('touchend', () => {
-            isDragging = false;
-            currentButton = null;
-            lastPlayedNote = null;
+            this.isDragging = false;
+            this.currentDragButton = null;
+            this.lastPlayedNote = null;
         });
     }
 
@@ -413,6 +430,7 @@ class MusicCalculator {
         // 避免重复播放同一个音符
         if (note !== this.lastPlayedNote) {
             this.lastPlayedNote = note;
+            // 播放新的音符（不停止当前声音，允许和弦效果）
             this.playSound(baseFrequency, note, button);
         }
     }
