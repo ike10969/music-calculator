@@ -352,54 +352,62 @@ class MusicCalculator {
         displayArea.innerHTML = `<div style="color: #ff4444; text-align: center;">${message}</div>`;
     }
 
-    // 添加滑动事件处理
+    // 添加滑动事件处理 - 修复版本
     addSwipeEvents() {
-        // 使用实例变量而不是局部变量
-        this.isDragging = false;
-        this.currentDragButton = null;
+        // 为每个按钮添加鼠标进入事件
+        document.querySelectorAll('.note-btn').forEach(button => {
+            button.addEventListener('mouseenter', (e) => {
+                // 检查是否正在拖动（鼠标按下状态）
+                if (this.isDragging) {
+                    const note = button.dataset.note;
+                    const baseFrequency = parseFloat(button.dataset.frequency);
+                    
+                    // 避免重复播放同一个音符
+                    if (note !== this.lastPlayedNote) {
+                        this.lastPlayedNote = note;
+                        // 停止当前所有声音，然后播放新音符
+                        this.stopSound();
+                        this.playSound(baseFrequency, note, button);
+                    }
+                }
+            });
+        });
 
-        // 鼠标事件
+        // 全局鼠标按下事件
         document.addEventListener('mousedown', (e) => {
             if (e.target.closest('.note-btn')) {
                 this.isDragging = true;
-                this.currentDragButton = e.target.closest('.note-btn');
-                // 记录初始按钮，避免立即切换
-                this.lastPlayedNote = this.currentDragButton.dataset.note;
+                const startButton = e.target.closest('.note-btn');
+                const note = startButton.dataset.note;
+                const baseFrequency = parseFloat(startButton.dataset.frequency);
+                
+                this.lastPlayedNote = note;
                 // 播放初始按钮的声音
-                const note = this.currentDragButton.dataset.note;
-                const baseFrequency = parseFloat(this.currentDragButton.dataset.frequency);
-                this.playSound(baseFrequency, note, this.currentDragButton);
+                this.playSound(baseFrequency, note, startButton);
             }
         });
 
-        document.addEventListener('mousemove', (e) => {
-            if (!this.isDragging) return;
-            
-            const hoveredElement = document.elementFromPoint(e.clientX, e.clientY);
-            const noteButton = hoveredElement?.closest('.note-btn');
-            
-            if (noteButton && noteButton !== this.currentDragButton) {
-                this.currentDragButton = noteButton;
-                this.handleSwipeToButton(noteButton);
-            }
-        });
-
-        document.addEventListener('mouseup', () => {
+        // 全局鼠标释放事件
+        document.addEventListener('mouseup', (e) => {
             if (this.isDragging) {
                 this.stopSound();
             }
             this.isDragging = false;
-            this.currentDragButton = null;
             this.lastPlayedNote = null;
         });
 
         // 触摸事件
+        let touchStartButton = null;
+        
         document.addEventListener('touchstart', (e) => {
             if (e.target.closest('.note-btn')) {
+                touchStartButton = e.target.closest('.note-btn');
                 this.isDragging = true;
-                this.currentDragButton = e.target.closest('.note-btn');
-                // 记录初始按钮，避免立即切换
-                this.lastPlayedNote = this.currentDragButton.dataset.note;
+                const note = touchStartButton.dataset.note;
+                const baseFrequency = parseFloat(touchStartButton.dataset.frequency);
+                
+                this.lastPlayedNote = note;
+                this.playSound(baseFrequency, note, touchStartButton);
             }
         }, { passive: false });
 
@@ -410,29 +418,26 @@ class MusicCalculator {
             const hoveredElement = document.elementFromPoint(touch.clientX, touch.clientY);
             const noteButton = hoveredElement?.closest('.note-btn');
             
-            if (noteButton && noteButton !== this.currentDragButton) {
-                this.currentDragButton = noteButton;
-                this.handleSwipeToButton(noteButton);
+            if (noteButton && noteButton !== touchStartButton) {
+                const note = noteButton.dataset.note;
+                const baseFrequency = parseFloat(noteButton.dataset.frequency);
+                
+                if (note !== this.lastPlayedNote) {
+                    this.lastPlayedNote = note;
+                    this.stopSound();
+                    this.playSound(baseFrequency, note, noteButton);
+                }
             }
         }, { passive: false });
 
-        document.addEventListener('touchend', () => {
+        document.addEventListener('touchend', (e) => {
+            if (this.isDragging) {
+                this.stopSound();
+            }
             this.isDragging = false;
-            this.currentDragButton = null;
             this.lastPlayedNote = null;
+            touchStartButton = null;
         });
-    }
-
-    handleSwipeToButton(button) {
-        const note = button.dataset.note;
-        const baseFrequency = parseFloat(button.dataset.frequency);
-        
-        // 避免重复播放同一个音符
-        if (note !== this.lastPlayedNote) {
-            this.lastPlayedNote = note;
-            // 播放新的音符（不停止当前声音，允许和弦效果）
-            this.playSound(baseFrequency, note, button);
-        }
     }
 }
 
