@@ -61,6 +61,9 @@ class MusicCalculator {
             button.addEventListener('mouseleave', () => this.stopSound());
         });
 
+        // 添加滑动事件监听
+        this.addSwipeEvents();
+
         // 功能按钮事件
         document.getElementById('sharp-btn').addEventListener('click', () => this.sharpPitch());
         document.getElementById('flat-btn').addEventListener('click', () => this.flatPitch());
@@ -78,17 +81,30 @@ class MusicCalculator {
         // 为每个按钮添加单独的释放事件
         document.querySelectorAll('.note-btn').forEach(button => {
             button.addEventListener('mouseup', (e) => {
+                e.stopPropagation(); // 阻止事件冒泡
                 const note = button.dataset.note;
                 this.stopSingleSound(note);
             });
             button.addEventListener('touchend', (e) => {
+                e.stopPropagation(); // 阻止事件冒泡
                 const note = button.dataset.note;
                 this.stopSingleSound(note);
             });
             button.addEventListener('mouseleave', (e) => {
-                const note = button.dataset.note;
-                this.stopSingleSound(note);
+                // 只在鼠标离开按钮且按钮处于按下状态时停止声音
+                if (e.buttons === 1) { // 检查左键是否按下
+                    const note = button.dataset.note;
+                    this.stopSingleSound(note);
+                }
             });
+        });
+
+        // 全局停止事件（用于清除所有声音）
+        document.addEventListener('mouseup', () => {
+            // 不在这里处理单个音符停止，由按钮事件处理
+        });
+        document.addEventListener('touchend', () => {
+            // 不在这里处理单个音符停止，由按钮事件处理
         });
 
         // 防止移动端默认行为
@@ -101,6 +117,7 @@ class MusicCalculator {
 
     handleNotePress(event) {
         event.preventDefault();
+        event.stopPropagation(); // 阻止事件冒泡
         const button = event.target.closest('.note-btn');
         if (!button) return;
 
@@ -188,18 +205,28 @@ class MusicCalculator {
         const sound = this.activeOscillators.get(noteId);
         if (sound) {
             try {
+                // 清除该音符的长按计时器
+                if (this.longPressTimers.has(noteId)) {
+                    clearTimeout(this.longPressTimers.get(noteId));
+                    this.longPressTimers.delete(noteId);
+                }
+
                 // 淡出效果
                 const now = this.audioContext.currentTime;
                 sound.gainNode.gain.cancelScheduledValues(now);
                 sound.gainNode.gain.linearRampToValueAtTime(0, now + 0.05);
                 
                 setTimeout(() => {
-                    sound.oscillator.stop();
-                    sound.oscillator.disconnect();
-                    sound.gainNode.disconnect();
-                    this.activeOscillators.delete(noteId);
-                    this.removePlayingEffect(sound.button);
-                    this.updateChordDisplay();
+                    try {
+                        sound.oscillator.stop();
+                        sound.oscillator.disconnect();
+                        sound.gainNode.disconnect();
+                        this.activeOscillators.delete(noteId);
+                        this.removePlayingEffect(sound.button);
+                        this.updateChordDisplay();
+                    } catch (error) {
+                        console.error('清理振荡器失败:', error);
+                    }
                 }, 50);
                 
             } catch (error) {
@@ -317,6 +344,77 @@ class MusicCalculator {
     showError(message) {
         const displayArea = document.querySelector('.display-area');
         displayArea.innerHTML = `<div style="color: #ff4444; text-align: center;">${message}</div>`;
+    }
+
+    // 添加滑动事件处理
+    addSwipeEvents() {
+        let isDragging = false;
+        let currentButton = null;
+        let lastPlayedNote = null;
+
+        // 鼠标事件
+        document.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.note-btn')) {
+                isDragging = true;
+                currentButton = e.target.closest('.note-btn');
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const hoveredButton = document.elementFromPoint(e.clientX, e.clientY);
+            const noteButton = hoveredButton?.closest('.note-btn');
+            
+            if (noteButton && noteButton !== currentButton) {
+                currentButton = noteButton;
+                this.handleSwipeToButton(noteButton);
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            currentButton = null;
+            lastPlayedNote = null;
+        });
+
+        // 触摸事件
+        document.addEventListener('touchstart', (e) => {
+            if (e.target.closest('.note-btn')) {
+                isDragging = true;
+                currentButton = e.target.closest('.note-btn');
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            
+            const touch = e.touches[0];
+            const hoveredElement = document.elementFromPoint(touch.clientX, touch.clientY);
+            const noteButton = hoveredElement?.closest('.note-btn');
+            
+            if (noteButton && noteButton !== currentButton) {
+                currentButton = noteButton;
+                this.handleSwipeToButton(noteButton);
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchend', () => {
+            isDragging = false;
+            currentButton = null;
+            lastPlayedNote = null;
+        });
+    }
+
+    handleSwipeToButton(button) {
+        const note = button.dataset.note;
+        const baseFrequency = parseFloat(button.dataset.frequency);
+        
+        // 避免重复播放同一个音符
+        if (note !== this.lastPlayedNote) {
+            this.lastPlayedNote = note;
+            this.playSound(baseFrequency, note, button);
+        }
     }
 }
 
